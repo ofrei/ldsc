@@ -313,8 +313,14 @@ def ldscore(args, log):
             annot_matrix = pq
 
     log.log("Estimating LD Score.")
-    lN = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=annot_matrix)
-    col_prefix = "L2"; file_suffix = "l2"
+    if args.l2:
+        lN = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=annot_matrix)
+        col_prefix = "L2"; file_suffix = "l2"
+    elif args.l4:
+        lN = geno_array.ldScoreVarBlocks_l4(block_left, args.chunk_size, annot=annot_matrix)
+        col_prefix = "L4"; file_suffix = "l4"
+    else:
+        raise ValueError('Must specify --l2 or --l4 option')
 
     if n_annot == 1:
         ldscore_colnames = [col_prefix+scale_suffix]
@@ -487,6 +493,8 @@ parser.add_argument('--no-print-annot', default=False, action='store_true',
     'to print the annot matrix. ')
 parser.add_argument('--maf', default=None, type=float,
     help='Minor allele frequency lower bound. Default is MAF > 0.')
+parser.add_argument('--l4', default=False, action='store_true',
+    help='Estimate l4. Compatible with both jackknife and non-jackknife.')
 # Basic Flags for Working with Variance Components
 parser.add_argument('--h2', default=None, type=str,
     help='Filename for a .sumstats[.gz] file for one-phenotype LD Score regression. '
@@ -601,7 +609,7 @@ if __name__ == '__main__':
         if args.n_blocks <= 1:
             raise ValueError('--n-blocks must be an integer > 1.')
         if args.bfile is not None:
-            if args.l2 is None:
+            if args.l2 is None and args.l4 is None:
                 raise ValueError('Must specify --l2 with --bfile.')
             if args.annot is not None and args.extract is not None:
                 raise ValueError('--annot and --extract are currently incompatible.')
