@@ -314,10 +314,12 @@ def ldscore(args, log):
 
     log.log("Estimating LD Score.")
     if args.l2:
-        lN = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=annot_matrix)
+        lN = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=annot_matrix,
+                                         r2Min=args.r2_min, r2Max=args.r2_max)
         col_prefix = "L2"; file_suffix = "l2"
     elif args.l4:
-        lN = geno_array.ldScoreVarBlocks_l4(block_left, args.chunk_size, annot=annot_matrix)
+        lN = geno_array.ldScoreVarBlocks_l4(block_left, args.chunk_size, annot=annot_matrix,
+                                            r2Min=args.r2_min, r2Max=args.r2_max)
         col_prefix = "L4"; file_suffix = "l4"
     else:
         raise ValueError('Must specify --l2 or --l4 option')
@@ -495,6 +497,13 @@ parser.add_argument('--maf', default=None, type=float,
     help='Minor allele frequency lower bound. Default is MAF > 0.')
 parser.add_argument('--l4', default=False, action='store_true',
     help='Estimate l4. Compatible with both jackknife and non-jackknife.')
+parser.add_argument('--r2-min', default=None, type=float,
+    help='Lower bound (exclusive) of r2 to consider in ld score estimation. '
+    'Applies to --l2 and --l4.')
+parser.add_argument('--r2-max', default=None, type=float,
+    help='Upper bound (inclusive) of r2 to consider in ld score estimation. '
+    'Applies to --l2 and --l4.')
+
 # Basic Flags for Working with Variance Components
 parser.add_argument('--h2', default=None, type=str,
     help='Filename for a .sumstats[.gz] file for one-phenotype LD Score regression. '
