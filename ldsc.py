@@ -315,11 +315,13 @@ def ldscore(args, log):
     log.log("Estimating LD Score.")
     if args.l2:
         lN = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=annot_matrix,
-                                         r2Min=args.r2_min, r2Max=args.r2_max)
+                                         r2Min=args.r2_min, r2Max=args.r2_max,
+                                         unbiased=(not args.bias_r2))
         col_prefix = "L2"; file_suffix = "l2"
     elif args.l4:
         lN = geno_array.ldScoreVarBlocks_l4(block_left, args.chunk_size, annot=annot_matrix,
-                                            r2Min=args.r2_min, r2Max=args.r2_max)
+                                            r2Min=args.r2_min, r2Max=args.r2_max,
+                                            unbiased=(not args.bias_r2))
         col_prefix = "L4"; file_suffix = "l4"
     else:
         raise ValueError('Must specify --l2 or --l4 option')
@@ -503,6 +505,8 @@ parser.add_argument('--r2-min', default=None, type=float,
 parser.add_argument('--r2-max', default=None, type=float,
     help='Upper bound (inclusive) of r2 to consider in ld score estimation. '
     'Applies to --l2 and --l4.')
+parser.add_argument('--bias-r2', default=False, action='store_true',
+    help='Keep biased r2 estimates in ld score calculation (applies to both --l2 and --l4)')
 
 # Basic Flags for Working with Variance Components
 parser.add_argument('--h2', default=None, type=str,

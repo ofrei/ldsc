@@ -123,15 +123,15 @@ class __GenotypeArrayInMemory__(object):
         if r2Max is not None: x[x > r2Max] = 0
         return x
 
-    def ldScoreVarBlocks(self, block_left, c, annot=None, r2Min=None, r2Max=None):
+    def ldScoreVarBlocks(self, block_left, c, annot=None, r2Min=None, r2Max=None, unbiased=True):
         '''Computes an unbiased estimate of L2(j) for j=1,..,M.'''
-        func = lambda x: self.__l2_clip(self.__l2_unbiased__(x, self.n), r2Min, r2Max)
+        func = lambda x: self.__l2_clip(self.__l2_unbiased__(x, self.n) if unbiased else np.square(x), r2Min, r2Max)
         snp_getter = self.nextSNPs
         return self.__corSumVarBlocks__(block_left, c, func, snp_getter, annot)
 
-    def ldScoreVarBlocks_l4(self, block_left, c, annot=None, r2Min=None, r2Max=None):
+    def ldScoreVarBlocks_l4(self, block_left, c, annot=None, r2Min=None, r2Max=None, unbiased=True):
         '''Computes an unbiased estimate of L4(j) for j=1,..,M.'''
-        func = lambda x: np.square(self.__l2_clip(self.__l2_unbiased__(x, self.n), r2Min, r2Max))
+        func = lambda x: np.square(self.__l2_clip(self.__l2_unbiased__(x, self.n) if unbiased else np.square(x), r2Min, r2Max))
         snp_getter = self.nextSNPs
         return self.__corSumVarBlocks__(block_left, c, func, snp_getter, annot)
 
