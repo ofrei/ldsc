@@ -118,20 +118,20 @@ class __GenotypeArrayInMemory__(object):
     def __filter_maf_(geno, m, n, maf):
         raise NotImplementedError
 
-    def __l2_clip(self, x, r2Min, r2Max):
-        if r2Min is not None: x[x <= r2Min] = 0
-        if r2Max is not None: x[x > r2Max] = 0
+    def __l2_clip(self, x, r2Min, r2Max, r2):
+        if r2Min is not None: x[r2 <= r2Min] = 0
+        if r2Max is not None: x[r2 > r2Max] = 0
         return x
 
     def ldScoreVarBlocks(self, block_left, c, annot=None, r2Min=None, r2Max=None, unbiased=True):
-        '''Computes an unbiased estimate of L2(j) for j=1,..,M.'''
-        func = lambda x: self.__l2_clip(self.__l2_unbiased__(x, self.n) if unbiased else np.square(x), r2Min, r2Max)
+        '''Computes biased or unbiased estimate of L2(j) for j=1,..,M.'''
+        func = lambda x: self.__l2_clip(self.__l2_unbiased__(x, self.n) if unbiased else np.square(x), r2Min, r2Max, np.square(x))
         snp_getter = self.nextSNPs
         return self.__corSumVarBlocks__(block_left, c, func, snp_getter, annot)
 
-    def ldScoreVarBlocks_l4(self, block_left, c, annot=None, r2Min=None, r2Max=None, unbiased=True):
-        '''Computes an unbiased estimate of L4(j) for j=1,..,M.'''
-        func = lambda x: np.square(self.__l2_clip(self.__l2_unbiased__(x, self.n) if unbiased else np.square(x), r2Min, r2Max))
+    def ldScoreVarBlocks_l4(self, block_left, c, annot=None, r2Min=None, r2Max=None):
+        '''Computes biased estimate of L4(j) for j=1,..,M.'''
+        func = lambda x: self.__l2_clip(np.square(np.square(x)), r2Min, r2Max, np.square(x))
         snp_getter = self.nextSNPs
         return self.__corSumVarBlocks__(block_left, c, func, snp_getter, annot)
 

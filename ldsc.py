@@ -320,8 +320,7 @@ def ldscore(args, log):
         col_prefix = "L2"; file_suffix = "l2"
     elif args.l4:
         lN = geno_array.ldScoreVarBlocks_l4(block_left, args.chunk_size, annot=annot_matrix,
-                                            r2Min=args.r2_min, r2Max=args.r2_max,
-                                            unbiased=(not args.bias_r2))
+                                            r2Min=args.r2_min, r2Max=args.r2_max)
         col_prefix = "L4"; file_suffix = "l4"
     else:
         raise ValueError('Must specify --l2 or --l4 option')
@@ -501,12 +500,15 @@ parser.add_argument('--l4', default=False, action='store_true',
     help='Estimate l4. Compatible with both jackknife and non-jackknife.')
 parser.add_argument('--r2-min', default=None, type=float,
     help='Lower bound (exclusive) of r2 to consider in ld score estimation. '
-    'Applies to --l2 and --l4.')
+    'Intended usage of this parameter is to create a binned histogram of l2 or l4 values. '
+    'For this reason --r2-min and --r2-max are always applied to biased estimates of allelic correlation, regardless of --bias-r2 flag, '
+    'to ensure that "--r2-min 0 --r2-max 1" cover the entire range of r2 values. '
+    'Can be used together with --l2 and --l4.')
 parser.add_argument('--r2-max', default=None, type=float,
     help='Upper bound (inclusive) of r2 to consider in ld score estimation. '
-    'Applies to --l2 and --l4.')
+    'See description of --r2-min option for additional details.')
 parser.add_argument('--bias-r2', default=False, action='store_true',
-    help='Keep biased r2 estimates in ld score calculation (applies to both --l2 and --l4)')
+    help='Keep biased r2 estimates in ld score calculation (applies to --l2; incompatible with --l4; has no effect on --r2-min and --r2-max)')
 
 # Basic Flags for Working with Variance Components
 parser.add_argument('--h2', default=None, type=str,
@@ -623,7 +625,9 @@ if __name__ == '__main__':
             raise ValueError('--n-blocks must be an integer > 1.')
         if args.bfile is not None:
             if args.l2 is None and args.l4 is None:
-                raise ValueError('Must specify --l2 with --bfile.')
+                raise ValueError('Must specify --l2 or --l4 with --bfile.')
+            if (args.bias_r2 is not None) and (args.l2 is None):
+                raise ValueError('--bias-r2 can be used only with --l2.')
             if args.annot is not None and args.extract is not None:
                 raise ValueError('--annot and --extract are currently incompatible.')
             if args.cts_bin is not None and args.extract is not None:
