@@ -102,6 +102,9 @@ def __filter__(fname, noun, verb, merge_obj):
 
         return merged_list
 
+def __isclose__(a, b, rel_tol=1e-09, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
 def annot_sort_key(s):
     '''For use with --cts-bin. Fixes weird pandas crosstab column order.'''
     if type(s) == tuple:
@@ -313,14 +316,25 @@ def ldscore(args, log):
             annot_matrix = pq
 
     log.log("Estimating LD Score.")
+
+    # Adjust r2_min and  r2_max thresholds.
+    # They must be vectors (e.g. [None] instead of None).
+    # Values of 0.0 and 1.0 must be replaced with None to avoid filtering.
+    # Mathematicaly all r2 values are within [0, 1], but due to float-point precision
+    # some values may exceed 1 my small amount, and we don't want them to be filtered.
+    if args.r2_min is None: args.r2_min = [None]
+    if args.r2_max is None: args.r2_max = [None]
+    args.r2_min = [None if __isclose__(x, 0.0) else x for x in args.r2_min]
+    args.r2_max = [None if __isclose__(x, 1.0) else x for x in args.r2_max]
+
     if args.l2:
-        lN = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=annot_matrix,
-                                         r2Min=args.r2_min, r2Max=args.r2_max,
-                                         unbiased=(not args.bias_r2))
+        lN_vec = geno_array.ldScoreVarBlocks(block_left, args.chunk_size, annot=annot_matrix,
+                                             r2Min_vec=args.r2_min, r2Max_vec=args.r2_max,
+                                             unbiased=(not args.bias_r2))
         col_prefix = "L2"; file_suffix = "l2"
     elif args.l4:
-        lN = geno_array.ldScoreVarBlocks_l4(block_left, args.chunk_size, annot=annot_matrix,
-                                            r2Min=args.r2_min, r2Max=args.r2_max)
+        lN_vec = geno_array.ldScoreVarBlocks_l4(block_left, args.chunk_size, annot=annot_matrix,
+                                                r2Min_vec=args.r2_min, r2Max_vec=args.r2_max)
         col_prefix = "L4"; file_suffix = "l4"
     else:
         raise ValueError('Must specify --l2 or --l4 option')
@@ -331,99 +345,101 @@ def ldscore(args, log):
         ldscore_colnames =  [y+col_prefix+scale_suffix for y in annot_colnames]
 
     # print .ldscore. Output columns: CHR, BP, RS, [LD Scores]
-    out_fname = args.out + '.' + file_suffix + '.ldscore'
-    new_colnames = geno_array.colnames + ldscore_colnames
-    df = pd.DataFrame.from_records(np.c_[geno_array.df, lN])
-    df.columns = new_colnames
-    if args.print_snps:
-        if args.print_snps.endswith('gz'):
-            print_snps = pd.read_csv(args.print_snps, header=None, compression='gzip')
-        elif args.print_snps.endswith('bz2'):
-            print_snps = pd.read_csv(args.print_snps, header=None, compression='bz2')
-        else:
-            print_snps = pd.read_csv(args.print_snps, header=None)
-        if len(print_snps.columns) > 1:
-            raise ValueError('--print-snps must refer to a file with a one column of SNP IDs.')
-        log.log('Reading list of {N} SNPs for which to print LD Scores from {F}'.format(\
-                        F=args.print_snps, N=len(print_snps)))
-
-        print_snps.columns=['SNP']
-        df = df.ix[df.SNP.isin(print_snps.SNP),:]
-        if len(df) == 0:
-            raise ValueError('After merging with --print-snps, no SNPs remain.')
-        else:
-            msg = 'After merging with --print-snps, LD Scores for {N} SNPs will be printed.'
-            log.log(msg.format(N=len(df)))
-
-    l2_suffix = '.gz'
-    log.log("Writing LD Scores for {N} SNPs to {f}.gz".format(f=out_fname, N=len(df)))
-    df.drop(['CM','MAF'], axis=1).to_csv(out_fname, sep="\t", header=True, index=False,
-        float_format='%.3f')
-    call(['gzip', '-f', out_fname])
-    if annot_matrix is not None:
-        M = np.atleast_1d(np.squeeze(np.asarray(np.sum(annot_matrix, axis=0))))
-        ii = geno_array.maf > 0.05
-        M_5_50 = np.atleast_1d(np.squeeze(np.asarray(np.sum(annot_matrix[ii,:], axis=0))))
-    else:
-        M = [geno_array.m]
-        M_5_50 = [np.sum(geno_array.maf > 0.05)]
-
-    # print .M
-    fout_M = open(args.out + '.'+ file_suffix +'.M','wb')
-    print >>fout_M, '\t'.join(map(str,M))
-    fout_M.close()
-
-    # print .M_5_50
-    fout_M_5_50 = open(args.out + '.'+ file_suffix +'.M_5_50','wb')
-    print >>fout_M_5_50, '\t'.join(map(str,M_5_50))
-    fout_M_5_50.close()
-
-    # print annot matrix
-    if (args.cts_bin is not None) and not args.no_print_annot:
-        out_fname_annot = args.out + '.annot'
+    for lN_index, lN in enumerate(lN_vec):
+        r2_bin_suffix = '-r2bin-{i}'.format(i=(lN_index+1)) if len(lN_vec) > 1 else ''
+        out_fname = args.out + r2_bin_suffix + '.' + file_suffix + '.ldscore'
         new_colnames = geno_array.colnames + ldscore_colnames
-        annot_df = pd.DataFrame(np.c_[geno_array.df, annot_matrix])
-        annot_df.columns = new_colnames
-        del annot_df['MAF']
-        log.log("Writing annot matrix produced by --cts-bin to {F}".format(F=out_fname+'.gz'))
-        annot_df.to_csv(out_fname_annot, sep="\t", header=True, index=False)
-        call(['gzip', '-f', out_fname_annot])
+        df = pd.DataFrame.from_records(np.c_[geno_array.df, lN])
+        df.columns = new_colnames
+        if args.print_snps:
+            if args.print_snps.endswith('gz'):
+                print_snps = pd.read_csv(args.print_snps, header=None, compression='gzip')
+            elif args.print_snps.endswith('bz2'):
+                print_snps = pd.read_csv(args.print_snps, header=None, compression='bz2')
+            else:
+                print_snps = pd.read_csv(args.print_snps, header=None)
+            if len(print_snps.columns) > 1:
+                raise ValueError('--print-snps must refer to a file with a one column of SNP IDs.')
+            log.log('Reading list of {N} SNPs for which to print LD Scores from {F}'.format(\
+                            F=args.print_snps, N=len(print_snps)))
 
-    # print LD Score summary
-    pd.set_option('display.max_rows', 200)
-    log.log('\nSummary of LD Scores in {F}'.format(F=out_fname+l2_suffix))
-    t = df.ix[:,4:].describe()
-    log.log( t.ix[1:,:] )
+            print_snps.columns=['SNP']
+            df = df.ix[df.SNP.isin(print_snps.SNP),:]
+            if len(df) == 0:
+                raise ValueError('After merging with --print-snps, no SNPs remain.')
+            else:
+                msg = 'After merging with --print-snps, LD Scores for {N} SNPs will be printed.'
+                log.log(msg.format(N=len(df)))
 
-    np.seterr(divide='ignore', invalid='ignore')  # print NaN instead of weird errors
-    # print correlation matrix including all LD Scores and sample MAF
-    log.log('')
-    log.log('MAF/LD Score Correlation Matrix')
-    log.log( df.ix[:,4:].corr() )
+        l2_suffix = '.gz'
+        log.log("Writing LD Scores for {N} SNPs to {f}.gz".format(f=out_fname, N=len(df)))
+        df.drop(['CM','MAF'], axis=1).to_csv(out_fname, sep="\t", header=True, index=False,
+            float_format='%.3f')
+        call(['gzip', '-f', out_fname])
+        if annot_matrix is not None:
+            M = np.atleast_1d(np.squeeze(np.asarray(np.sum(annot_matrix, axis=0))))
+            ii = geno_array.maf > 0.05
+            M_5_50 = np.atleast_1d(np.squeeze(np.asarray(np.sum(annot_matrix[ii,:], axis=0))))
+        else:
+            M = [geno_array.m]
+            M_5_50 = [np.sum(geno_array.maf > 0.05)]
 
-    # print condition number
-    if n_annot > 1: # condition number of a column vector w/ nonzero var is trivially one
-        log.log('\nLD Score Matrix Condition Number')
-        cond_num = np.linalg.cond(df.ix[:,5:])
-        log.log( reg.remove_brackets(str(np.matrix(cond_num))) )
-        if cond_num > 10000:
-            log.log('WARNING: ill-conditioned LD Score Matrix!')
+        # print .M
+        fout_M = open(args.out + '.'+ file_suffix +'.M','wb')
+        print >>fout_M, '\t'.join(map(str,M))
+        fout_M.close()
 
-    # summarize annot matrix if there is one
-    if annot_matrix is not None:
-        # covariance matrix
-        x = pd.DataFrame(annot_matrix, columns=annot_colnames)
-        log.log('\nAnnotation Correlation Matrix')
-        log.log( x.corr() )
+        # print .M_5_50
+        fout_M_5_50 = open(args.out + '.'+ file_suffix +'.M_5_50','wb')
+        print >>fout_M_5_50, '\t'.join(map(str,M_5_50))
+        fout_M_5_50.close()
 
-        # column sums
-        log.log('\nAnnotation Matrix Column Sums')
-        log.log(_remove_dtype(x.sum(axis=0)))
+        # print annot matrix
+        if (args.cts_bin is not None) and not args.no_print_annot:
+            out_fname_annot = args.out + '.annot'
+            new_colnames = geno_array.colnames + ldscore_colnames
+            annot_df = pd.DataFrame(np.c_[geno_array.df, annot_matrix])
+            annot_df.columns = new_colnames
+            del annot_df['MAF']
+            log.log("Writing annot matrix produced by --cts-bin to {F}".format(F=out_fname+'.gz'))
+            annot_df.to_csv(out_fname_annot, sep="\t", header=True, index=False)
+            call(['gzip', '-f', out_fname_annot])
 
-        # row sums
-        log.log('\nSummary of Annotation Matrix Row Sums')
-        row_sums = x.sum(axis=1).describe()
-        log.log(_remove_dtype(row_sums))
+        # print LD Score summary
+        pd.set_option('display.max_rows', 200)
+        log.log('\nSummary of LD Scores in {F}'.format(F=out_fname+l2_suffix))
+        t = df.ix[:,4:].describe()
+        log.log( t.ix[1:,:] )
+
+        np.seterr(divide='ignore', invalid='ignore')  # print NaN instead of weird errors
+        # print correlation matrix including all LD Scores and sample MAF
+        log.log('')
+        log.log('MAF/LD Score Correlation Matrix')
+        log.log( df.ix[:,4:].corr() )
+
+        # print condition number
+        if n_annot > 1: # condition number of a column vector w/ nonzero var is trivially one
+            log.log('\nLD Score Matrix Condition Number')
+            cond_num = np.linalg.cond(df.ix[:,5:])
+            log.log( reg.remove_brackets(str(np.matrix(cond_num))) )
+            if cond_num > 10000:
+                log.log('WARNING: ill-conditioned LD Score Matrix!')
+
+        # summarize annot matrix if there is one
+        if annot_matrix is not None:
+            # covariance matrix
+            x = pd.DataFrame(annot_matrix, columns=annot_colnames)
+            log.log('\nAnnotation Correlation Matrix')
+            log.log( x.corr() )
+
+            # column sums
+            log.log('\nAnnotation Matrix Column Sums')
+            log.log(_remove_dtype(x.sum(axis=0)))
+
+            # row sums
+            log.log('\nSummary of Annotation Matrix Row Sums')
+            row_sums = x.sum(axis=1).describe()
+            log.log(_remove_dtype(row_sums))
 
     np.seterr(divide='raise', invalid='raise')
 
@@ -498,13 +514,13 @@ parser.add_argument('--maf', default=None, type=float,
     help='Minor allele frequency lower bound. Default is MAF > 0.')
 parser.add_argument('--l4', default=False, action='store_true',
     help='Estimate l4. Compatible with both jackknife and non-jackknife.')
-parser.add_argument('--r2-min', default=None, type=float,
+parser.add_argument('--r2-min', default=None, type=float, nargs='+',
     help='Lower bound (exclusive) of r2 to consider in ld score estimation. '
     'Intended usage of this parameter is to create a binned histogram of l2 or l4 values. '
     'For this reason --r2-min and --r2-max are always applied to biased estimates of allelic correlation, regardless of --bias-r2 flag, '
     'to ensure that "--r2-min 0 --r2-max 1" cover the entire range of r2 values. '
     'Can be used together with --l2 and --l4.')
-parser.add_argument('--r2-max', default=None, type=float,
+parser.add_argument('--r2-max', default=None, type=float, nargs='+',
     help='Upper bound (inclusive) of r2 to consider in ld score estimation. '
     'See description of --r2-min option for additional details.')
 parser.add_argument('--bias-r2', default=False, action='store_true',
@@ -624,10 +640,10 @@ if __name__ == '__main__':
         if args.n_blocks <= 1:
             raise ValueError('--n-blocks must be an integer > 1.')
         if args.bfile is not None:
-            if args.l2 is None and args.l4 is None:
+            if args.l2 is False and args.l4 is False:
                 raise ValueError('Must specify --l2 or --l4 with --bfile.')
-            if (args.bias_r2 is not None) and (args.l2 is None):
-                raise ValueError('--bias-r2 can be used only with --l2.')
+            if (args.l4 is True) and (args.bias_r2 is False):
+                raise ValueError('--l4 must be used together with --bias-r2. Unbiased --l4 calculation is not implemented.')
             if args.annot is not None and args.extract is not None:
                 raise ValueError('--annot and --extract are currently incompatible.')
             if args.cts_bin is not None and args.extract is not None:
