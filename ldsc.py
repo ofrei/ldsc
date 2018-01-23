@@ -322,8 +322,8 @@ def ldscore(args, log):
     # Values of 0.0 and 1.0 must be replaced with None to avoid filtering.
     # Mathematicaly all r2 values are within [0, 1], but due to float-point precision
     # some values may exceed 1 my small amount, and we don't want them to be filtered.
-    if args.r2_min is None: args.r2_min = [None]
-    if args.r2_max is None: args.r2_max = [None]
+    if args.r2_min is None: args.r2_min = [0.0]
+    if args.r2_max is None: args.r2_max = [1.0]
     args.r2_min = [None if __isclose__(x, 0.0) else x for x in args.r2_min]
     args.r2_max = [None if __isclose__(x, 1.0) else x for x in args.r2_max]
 
