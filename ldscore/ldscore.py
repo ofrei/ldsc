@@ -218,7 +218,7 @@ class __GenotypeArrayInMemory__(object):
             B = A[:, l_B:l_B+c]
             np.dot(A.T, B / n, out=rfuncAB)
             for func, afunc, cor_sum in zip(func_vec, afunc_vec, cor_sum_vec):
-                cor_sum[l_A:l_A+b, :] += np.sum(afunc(np.multiply(func(rfuncAB), np.tile(annot[l_B:l_B+c, :], [1, b]), out=rfuncAB)))
+                cor_sum[l_A:l_A+b, :] += np.sum(afunc(np.multiply(func(rfuncAB), np.tile(annot[l_B:l_B+c, :], [1, b]).T)))
         # chunk to right of block
         b0 = b
         md = int(c*np.floor(m/c))
@@ -257,9 +257,9 @@ class __GenotypeArrayInMemory__(object):
             np.dot(A.T, B / n, out=rfuncAB)
             np.dot(B.T, B / n, out=rfuncBB)
             for func, afunc, cor_sum in zip(func_vec, afunc_vec, cor_sum_vec):
-                cor_sum[l_A:l_A+b, :] += np.sum(afunc(np.multiply(func(rfuncAB), np.tile(annot[l_B:l_B+c, :], [1, b]))))
-                cor_sum[l_B:l_B+c, :] += np.sum(afunc(np.multiply(np.tile(annot[l_A:l_A+b, :], [1, c]).T, func(rfuncAB)).T))
-                cor_sum[l_B:l_B+c, :] += np.sum(afunc(np.multiply(func(rfuncBB), np.tile(annot[l_B:l_B+c, :], [1, c]))))
+                cor_sum[l_A:l_A+b, :] += np.sum(afunc(np.multiply(func(rfuncAB), np.tile(annot[l_B:l_B+c, :], [1, b]).T)))
+                cor_sum[l_B:l_B+c, :] += np.sum(afunc(np.multiply(np.tile(annot[l_A:l_A+b, :], [1, c]), func(rfuncAB)).T))
+                cor_sum[l_B:l_B+c, :] += np.sum(afunc(np.multiply(func(rfuncBB), np.tile(annot[l_B:l_B+c, :], [1, c]).T)))
 
         return cor_sum_vec
 
