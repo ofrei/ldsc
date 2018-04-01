@@ -127,7 +127,7 @@ class __GenotypeArrayInMemory__(object):
         '''Computes biased or unbiased estimate of L2(j) for j=1,..,M.'''
         def create_func_l2(r2Min, r2Max):
             return lambda x: x
-        def create_afunc_l2(r2Min, r2Max)
+        def create_afunc_l2(r2Min, r2Max):
             return lambda x: self.__l2_clip(self.__l2_unbiased__(x, self.n) if unbiased else np.square(x), r2Min, r2Max, np.square(x))
         func_vec = [create_func_l2(r2Min, r2Max) for (r2Min, r2Max) in zip(r2Min_vec, r2Max_vec)]
         afunc_vec = [create_afunc_l2(r2Min, r2Max) for (r2Min, r2Max) in zip(r2Min_vec, r2Max_vec)]
