@@ -126,18 +126,24 @@ class __GenotypeArrayInMemory__(object):
     def ldScoreVarBlocks(self, block_left, c, annot=None, r2Min_vec=[None], r2Max_vec=[None], unbiased=True):
         '''Computes biased or unbiased estimate of L2(j) for j=1,..,M.'''
         def create_func_l2(r2Min, r2Max):
+            return lambda x: x
+        def create_afunc_l2(r2Min, r2Max)
             return lambda x: self.__l2_clip(self.__l2_unbiased__(x, self.n) if unbiased else np.square(x), r2Min, r2Max, np.square(x))
         func_vec = [create_func_l2(r2Min, r2Max) for (r2Min, r2Max) in zip(r2Min_vec, r2Max_vec)]
+        afunc_vec = [create_afunc_l2(r2Min, r2Max) for (r2Min, r2Max) in zip(r2Min_vec, r2Max_vec)]
         snp_getter = self.nextSNPs
-        return self.__corSumVarBlocks__(block_left, c, func_vec, snp_getter, annot)
+        return self.__corSumVarBlocks__(block_left, c, func_vec, afunc_vec, snp_getter, annot)
 
     def ldScoreVarBlocks_l4(self, block_left, c, annot=None, r2Min_vec=[None], r2Max_vec=[None]):
         '''Computes biased estimate of L4(j) for j=1,..,M.'''
         def create_func_l4(r2Min, r2Max):
+            return lambda x: x
+        def create_afunc_l4(r2Min, r2Max):
             return lambda x: self.__l2_clip(np.square(np.square(x)), r2Min, r2Max, np.square(x))
         func_vec = [create_func_l4(r2Min, r2Max) for (r2Min, r2Max) in zip(r2Min_vec, r2Max_vec)]
+        afunc_vec = [create_afunc_l4(r2Min, r2Max) for (r2Min, r2Max) in zip(r2Min_vec, r2Max_vec)]
         snp_getter = self.nextSNPs
-        return self.__corSumVarBlocks__(block_left, c, func_vec, snp_getter, annot)
+        return self.__corSumVarBlocks__(block_left, c, func_vec, afunc_vec, snp_getter, annot)
 
     def ldScoreBlockJackknife(self, block_left, c, annot=None, jN=10):
         func = lambda x: np.square(x)
@@ -150,7 +156,7 @@ class __GenotypeArrayInMemory__(object):
         return sq - (1-sq) / denom
 
     # general methods for calculating sums of Pearson correlation coefficients
-    def __corSumVarBlocks__(self, block_left, c, func_vec, snp_getter, annot=None):
+    def __corSumVarBlocks__(self, block_left, c, func_vec, afunc_vec, snp_getter, annot=None):
         '''
         Parameters
         ----------
@@ -166,6 +172,9 @@ class __GenotypeArrayInMemory__(object):
             Functions to be applied to the genotype correlation matrix. Before dotting with
             annot. Examples: for biased L2, np.square. For biased L4,
             lambda x: np.square(np.square(x)). For L1, lambda x: x.
+        afunc_vec : vector of function
+            Functions to be applied to the genotype correlation matrix. After dotting with
+            annot.
         snp_getter : function(int)
             The method to be used to get the next SNPs (normalized genotypes? Normalized
             genotypes with the minor allele as reference allele? etc)
@@ -208,8 +217,8 @@ class __GenotypeArrayInMemory__(object):
         for l_B in xrange(0, b, c):  # l_B := index of leftmost SNP in matrix B
             B = A[:, l_B:l_B+c]
             np.dot(A.T, B / n, out=rfuncAB)
-            for func, cor_sum in zip(func_vec, cor_sum_vec):
-                cor_sum[l_A:l_A+b, :] += np.dot(func(rfuncAB), annot[l_B:l_B+c, :])
+            for func, afunc, cor_sum in zip(func_vec, afunc_vec, cor_sum_vec):
+                cor_sum[l_A:l_A+b, :] += np.sum(afunc(np.multiply(func(rfuncAB), annot[l_B:l_B+c, :])))
         # chunk to right of block
         b0 = b
         md = int(c*np.floor(m/c))
@@ -247,10 +256,10 @@ class __GenotypeArrayInMemory__(object):
 
             np.dot(A.T, B / n, out=rfuncAB)
             np.dot(B.T, B / n, out=rfuncBB)
-            for func, cor_sum in zip(func_vec, cor_sum_vec):
-                cor_sum[l_A:l_A+b, :] += np.dot(func(rfuncAB), annot[l_B:l_B+c, :])
-                cor_sum[l_B:l_B+c, :] += np.dot(annot[l_A:l_A+b, :].T, func(rfuncAB)).T
-                cor_sum[l_B:l_B+c, :] += np.dot(func(rfuncBB), annot[l_B:l_B+c, :])
+            for func, afunc, cor_sum in zip(func_vec, afunc_vec, cor_sum_vec):
+                cor_sum[l_A:l_A+b, :] += np.sum(afunc(np.multiply(func(rfuncAB), annot[l_B:l_B+c, :])))
+                cor_sum[l_B:l_B+c, :] += np.sum(afunc(np.multiply(annot[l_A:l_A+b, :].T, func(rfuncAB)).T))
+                cor_sum[l_B:l_B+c, :] += np.sum(afunc(np.multiply(func(rfuncBB), annot[l_B:l_B+c, :])))
 
         return cor_sum_vec
 
