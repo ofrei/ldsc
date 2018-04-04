@@ -656,6 +656,8 @@ if __name__ == '__main__':
                 raise ValueError('Cannot set both --per-allele and --pq-exp (--per-allele is equivalent to --pq-exp 1).')
             if args.per_allele:
                 args.pq_exp = 1
+            if args.l4 and (args.pq_exp is not None):
+                args.pq_exp *= 2
 
 
             ldscore(args, log)
